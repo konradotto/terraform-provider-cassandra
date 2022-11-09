@@ -1,4 +1,4 @@
-module github.com/bartoszj/terraform-provider-cassandra
+module github.com/victhugo/terraform-provider-cassandra
 
 go 1.16
 
