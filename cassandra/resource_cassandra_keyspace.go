@@ -38,7 +38,7 @@ func resourceCassandraKeyspace() *schema.Resource {
 			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
-			"name": &schema.Schema{
+			"name": {
 				Type:        schema.TypeString,
 				Required:    true,
 				ForceNew:    true,
@@ -61,8 +61,8 @@ func resourceCassandraKeyspace() *schema.Resource {
 						return diag.Diagnostics{
 							{
 								Severity:      diag.Error,
-								Summary:       "Cannot manage system keyspace",
-								Detail:        fmt.Sprintf("cannot manage system keyspace, it is internal to Cassandra"),
+								Summary:       "Cannot manage 'system' keyspace",
+								Detail:        "cannot manage 'system' keyspace, it is internal to Cassandra",
 								AttributePath: path,
 							},
 						}
@@ -71,14 +71,14 @@ func resourceCassandraKeyspace() *schema.Resource {
 					return nil
 				},
 			},
-			"replication_strategy": &schema.Schema{
+			"replication_strategy": {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     false,
 				Description:  "Keyspace replication strategy - must be one of SimpleStrategy or NetworkTopologyStrategy",
 				ValidateFunc: validation.StringInSlice([]string{"SimpleStrategy", "NetworkTopologyStrategy", "SingleRegionStrategy"}, false),
 			},
-			"strategy_options": &schema.Schema{
+			"strategy_options": {
 				Type:        schema.TypeMap,
 				Required:    true,
 				ForceNew:    false,
@@ -103,7 +103,7 @@ func resourceCassandraKeyspace() *schema.Resource {
 					return hash(strings.Join(keys, ", "))
 				},
 			},
-			"durable_writes": &schema.Schema{
+			"durable_writes": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				ForceNew:    false,

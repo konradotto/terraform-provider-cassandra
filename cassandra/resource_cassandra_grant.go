@@ -20,7 +20,7 @@ const (
 	deleteGrantRawTemplate = `REVOKE {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} FROM "{{.Grantee}}"`
 	createGrantRawTemplate = `GRANT {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} TO "{{.Grantee}}"`
 	//readGrantRawTemplate   = `LIST {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace }}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} OF "{{.Grantee}}"`
-	readGrantRawTemplate = `SELECT permissions FROM system_auth.role_permissions where resource='data/{{if .Keyspace }}{{ .Keyspace }}{{end}}{{if and .Keyspace .Identifier}}/{{end}}{{if .Identifier}}{{.Identifier}}{{end}}' and role='{{.Grantee}}' ALLOW FILTERING;
+	readGrantRawTemplate = `SELECT permissions FROM system_auth.role_permissions where resource='data/{{if .Keyspace }}{{ .Keyspace }}{{end}}{{if and .Keyspace .Identifier}}/{{end}}{{if .Identifier}}{{.Identifier}}{{end}}' and role='{{.Grantee}}' ALLOW FILTERING;`
 
 	privilegeAll       = "all"
 	privilegeCreate    = "create"
@@ -62,7 +62,7 @@ var (
 	templateRead, _   = template.New("read_grant").Parse(readGrantRawTemplate)
 
 	validIdentifierRegex, _ = regexp.Compile(`^[^"]{1,256}$`)
-	validTableNameRegex, _  = regexp.Compile(`^[a-zA-Z0-9][a-zA-Z0-9_]{0,255}$`)
+	validTableNameRegex, _  = regexp.Compile(`^[a-zA-Z0-9][a-zA-Z0-9_]{0,255}`)
 
 	allPrivileges = []string{privilegeSelect, privilegeCreate, privilegeAlter, privilegeDrop, privilegeModify, privilegeAuthorize, privilegeDescribe, privilegeExecute}
 
@@ -139,7 +139,7 @@ func resourceCassandraGrant() *schema.Resource {
 		UpdateContext: resourceGrantUpdate,
 		DeleteContext: resourceGrantDelete,
 		Schema: map[string]*schema.Schema{
-			identifierPrivilege: &schema.Schema{
+			identifierPrivilege: {
 				Type:        schema.TypeString,
 				Required:    true,
 				ForceNew:    true,
@@ -162,14 +162,14 @@ func resourceCassandraGrant() *schema.Resource {
 					return nil
 				},
 			},
-			identifierGrantee: &schema.Schema{
+			identifierGrantee: {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
 				Description:  "role name who we are granting privilege(s) to",
 				ValidateFunc: validation.StringLenBetween(1, 256),
 			},
-			identifierResourceType: &schema.Schema{
+			identifierResourceType: {
 				Type:        schema.TypeString,
 				Required:    true,
 				ForceNew:    true,
@@ -192,7 +192,7 @@ func resourceCassandraGrant() *schema.Resource {
 					return nil
 				},
 			},
-			identifierKeyspaceName: &schema.Schema{
+			identifierKeyspaceName: {
 				Type:        schema.TypeString,
 				Optional:    true,
 				ForceNew:    true,
@@ -216,7 +216,7 @@ func resourceCassandraGrant() *schema.Resource {
 				},
 				ConflictsWith: []string{identifierRoleName, identifierMbeanName, identifierMbeanPattern},
 			},
-			identifierFunctionName: &schema.Schema{
+			identifierFunctionName: {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Description: fmt.Sprintf("keyspace qualifier to the resource, only applicable for resource %s", strings.Join(resourcesThatRequireKeyspaceQualifier, ", ")),
@@ -225,7 +225,7 @@ func resourceCassandraGrant() *schema.Resource {
 				},
 				ConflictsWith: []string{identifierTableName, identifierRoleName, identifierMbeanName, identifierMbeanPattern},
 			},
-			identifierTableName: &schema.Schema{
+			identifierTableName: {
 				Type:        schema.TypeString,
 				Optional:    true,
 				ForceNew:    true,
@@ -235,7 +235,7 @@ func resourceCassandraGrant() *schema.Resource {
 				},
 				ConflictsWith: []string{identifierFunctionName, identifierRoleName, identifierMbeanName, identifierMbeanPattern},
 			},
-			identifierRoleName: &schema.Schema{
+			identifierRoleName: {
 				Type:          schema.TypeString,
 				Optional:      true,
 				ForceNew:      true,
@@ -243,7 +243,7 @@ func resourceCassandraGrant() *schema.Resource {
 				ValidateFunc:  validation.StringLenBetween(1, 256),
 				ConflictsWith: []string{identifierFunctionName, identifierTableName, identifierMbeanName, identifierMbeanPattern, identifierKeyspaceName},
 			},
-			identifierMbeanName: &schema.Schema{
+			identifierMbeanName: {
 				Type:        schema.TypeString,
 				Optional:    true,
 				ForceNew:    true,
@@ -253,7 +253,7 @@ func resourceCassandraGrant() *schema.Resource {
 				},
 				ConflictsWith: []string{identifierFunctionName, identifierTableName, identifierRoleName, identifierMbeanPattern, identifierKeyspaceName},
 			},
-			identifierMbeanPattern: &schema.Schema{
+			identifierMbeanPattern: {
 				Type:        schema.TypeString,
 				Optional:    true,
 				ForceNew:    true,
