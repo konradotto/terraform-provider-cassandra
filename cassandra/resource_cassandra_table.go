@@ -2,7 +2,6 @@ package cassandra
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/kristoiv/gocqltable"
-	"github.com/kristoiv/gocqltable/recipes"
 )
 
 func resourceCassandraTable() *schema.Resource {
@@ -24,28 +22,28 @@ func resourceCassandraTable() *schema.Resource {
 			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
-			"name": &schema.Schema{
+			"name": {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
 				Description:  "Name of role - must contain between 1 and 256 characters",
 				ValidateFunc: validation.StringLenBetween(1, 256),
 			},
-			"keyspace": &schema.Schema{
+			"keyspace": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
 				ForceNew:    false,
 				Description: "Keyspace to create table within",
 			},
-			"row_keys": &schema.Schema{
+			"row_keys": {
 				Type:        schema.TypeList,
 				Default:     []string{},
 				Optional:    false,
 				ForceNew:    false,
 				Description: "List of Row Keys",
 			},
-			"range_keys": &schema.Schema{
+			"range_keys": {
 				Type:        schema.TypeList,
 				Default:     []string{},
 				Optional:    false,
@@ -56,28 +54,7 @@ func resourceCassandraTable() *schema.Resource {
 	}
 }
 
-func readTable(session *gocql.Session, name string) (string, bool, bool, string, error) {
-
-	var (
-		role        string
-		canLogin    bool
-		isSuperUser bool
-		saltedHash  string
-	)
-
-	iter := session.Query(`select role, can_login, is_superuser, salted_hash from system_auth.roles where role = ?`, name).Iter()
-
-	defer iter.Close()
-
-	log.Printf("read role query returned %d", iter.NumRows())
-
-	for iter.Scan(&role, &canLogin, &isSuperUser, &saltedHash) {
-		return role, canLogin, isSuperUser, saltedHash, nil
-	}
-
-	return "", false, false, "", fmt.Errorf("cannot read role with name %s", name)
-}
-
+// Fake Type for interface on select/query - which we're not going to use here.
 type TableRow map[string]interface{}
 
 func resourceTableCreateOrUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}, createTable bool) diag.Diagnostics {
@@ -104,18 +81,12 @@ func resourceTableCreateOrUpdate(ctx context.Context, d *schema.ResourceData, me
 	// Now we're ready to create our first keyspace. We start by getting a keyspace object
 	keyspace := gocqltable.NewKeyspace(keyspace_name)
 
-	resourceTable := struct {
-		recipes.CRUD // If you looked at the base example first, notice we replaced this line with the recipe
-	}{
-		recipes.CRUD{ // Here we didn't replace, but rather wrapped the table object in our recipe, effectively adding more methods to the end API
-			keyspace.NewTable(
-				name,       // The table name
-				row_keys,   // Row keys
-				range_keys, // Range keys
-				TableRow{},
-			),
-		},
-	}
+	resourceTable := keyspace.NewTable(
+		name,       // The table name
+		row_keys,   // Row keys
+		range_keys, // Range keys
+		TableRow{},
+	)
 
 	if createTable {
 		err = resourceTable.Create()
@@ -202,18 +173,12 @@ func resourceTableDelete(ctx context.Context, d *schema.ResourceData, meta inter
 
 	keyspace := gocqltable.NewKeyspace(keyspace_name)
 
-	resourceTable := struct {
-		recipes.CRUD // If you looked at the base example first, notice we replaced this line with the recipe
-	}{
-		recipes.CRUD{ // Here we didn't replace, but rather wrapped the table object in our recipe, effectively adding more methods to the end API
-			keyspace.NewTable(
-				name,       // The table name
-				row_keys,   // Row keys
-				range_keys, // Range keys
-				TableRow{},
-			),
-		},
-	}
+	resourceTable := keyspace.NewTable(
+		name,       // The table name
+		row_keys,   // Row keys
+		range_keys, // Range keys
+		TableRow{},
+	)
 
 	err := resourceTable.Drop()
 	if err != nil {

@@ -23,28 +23,28 @@ func resourceCassandraRole() *schema.Resource {
 			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
-			"name": &schema.Schema{
+			"name": {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
 				Description:  "Name of role - must contain between 1 and 256 characters",
 				ValidateFunc: validation.StringLenBetween(1, 256),
 			},
-			"super_user": &schema.Schema{
+			"super_user": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     false,
 				ForceNew:    false,
 				Description: "Allow role to create and manage other roles",
 			},
-			"login": &schema.Schema{
+			"login": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     true,
 				ForceNew:    false,
 				Description: "Enables role to be able to login",
 			},
-			"password": &schema.Schema{
+			"password": {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     false,
