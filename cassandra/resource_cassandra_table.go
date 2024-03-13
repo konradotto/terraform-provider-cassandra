@@ -16,7 +16,6 @@ func resourceCassandraTable() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceTableCreate,
 		ReadContext:   resourceTableRead,
-		UpdateContext: resourceTableUpdate,
 		DeleteContext: resourceTableDelete,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
@@ -31,23 +30,22 @@ func resourceCassandraTable() *schema.Resource {
 			},
 			"keyspace": {
 				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				ForceNew:    false,
+				Required:    true,
+				ForceNew:    true,
 				Description: "Keyspace to create table within",
 			},
 			"row_keys": {
 				Type:        schema.TypeList,
-				Default:     []string{},
-				Optional:    false,
-				ForceNew:    false,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Required:    true,
+				ForceNew:    true,
 				Description: "List of Row Keys",
 			},
 			"range_keys": {
 				Type:        schema.TypeList,
-				Default:     []string{},
-				Optional:    false,
-				ForceNew:    false,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Optional:    true,
+				ForceNew:    true,
 				Description: "List of Range Keys",
 			},
 		},
@@ -57,7 +55,7 @@ func resourceCassandraTable() *schema.Resource {
 // Fake Type for interface on select/query - which we're not going to use here.
 type TableRow map[string]interface{}
 
-func resourceTableCreateOrUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}, createTable bool) diag.Diagnostics {
+func resourceTableCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	var err error
 	name := d.Get("name").(string)
 	keyspace_name := d.Get("keyspace").(string)
@@ -88,11 +86,9 @@ func resourceTableCreateOrUpdate(ctx context.Context, d *schema.ResourceData, me
 		TableRow{},
 	)
 
-	if createTable {
-		err = resourceTable.Create()
-		if err != nil {
-			log.Fatalln(err)
-		}
+	err = resourceTable.Create()
+	if err != nil {
+		log.Fatalln(err)
 	}
 
 	d.SetId(name)
@@ -104,10 +100,6 @@ func resourceTableCreateOrUpdate(ctx context.Context, d *schema.ResourceData, me
 	diags = append(diags, resourceTableRead(ctx, d, meta)...)
 
 	return diags
-}
-
-func resourceTableCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	return resourceRoleCreateOrUpdate(ctx, d, meta, true)
 }
 
 func resourceTableRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -186,8 +178,4 @@ func resourceTableDelete(ctx context.Context, d *schema.ResourceData, meta inter
 	}
 
 	return diags
-}
-
-func resourceTableUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	return resourceTableCreateOrUpdate(ctx, d, meta, false)
 }
