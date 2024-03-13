@@ -20,7 +20,7 @@ const (
 	deleteGrantRawTemplate = `REVOKE {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} FROM "{{.Grantee}}"`
 	createGrantRawTemplate = `GRANT {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} TO "{{.Grantee}}"`
 	//readGrantRawTemplate   = `LIST {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace }}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} OF "{{.Grantee}}"`
-	readGrantRawTemplate = `SELECT permissions FROM system_auth.role_permissions where resource='data/{{if .Keyspace }}{{ .Keyspace }}{{end}}{{if and .Keyspace .Identifier}}/{{end}}{{if .Identifier}}{{.Identifier}}{{end}}' and role='{{.Grantee}}' ALLOW FILTERING;
+	readGrantRawTemplate = `SELECT permissions FROM system_auth.role_permissions where resource='data/{{if .Keyspace }}{{ .Keyspace }}{{end}}{{if and .Keyspace .Identifier}}/{{end}}{{if .Identifier}}{{.Identifier}}{{end}}' and role='{{.Grantee}}' ALLOW FILTERING;`
 
 	privilegeAll       = "all"
 	privilegeCreate    = "create"
@@ -62,7 +62,7 @@ var (
 	templateRead, _   = template.New("read_grant").Parse(readGrantRawTemplate)
 
 	validIdentifierRegex, _ = regexp.Compile(`^[^"]{1,256}$`)
-	validTableNameRegex, _  = regexp.Compile(`^[a-zA-Z0-9][a-zA-Z0-9_]{0,255}$`)
+	validTableNameRegex, _  = regexp.Compile(`^[a-zA-Z0-9][a-zA-Z0-9_]{0,255}`)
 
 	allPrivileges = []string{privilegeSelect, privilegeCreate, privilegeAlter, privilegeDrop, privilegeModify, privilegeAuthorize, privilegeDescribe, privilegeExecute}
 
