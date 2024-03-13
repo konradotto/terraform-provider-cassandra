@@ -1,6 +1,6 @@
-module github.com/victhugo/terraform-provider-cassandra
+module github.com/davidcollom/terraform-provider-cassandra
 
-go 1.16
+go 1.22
 
 require (
 	github.com/gocql/gocql v0.0.0-20220215161543-dbb3730926ea
