@@ -1,7 +1,9 @@
 package cassandra
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -12,8 +14,9 @@ import (
 	"github.com/kristoiv/gocqltable"
 )
 
-func resourceCassandraTable() *schema.Resource {
+func resourceCassandraTableSpace() *schema.Resource {
 	return &schema.Resource{
+		Description:   "Create and Delete Tables within Keyspaces",
 		CreateContext: resourceTableCreate,
 		ReadContext:   resourceTableRead,
 		DeleteContext: resourceTableDelete,
@@ -34,12 +37,37 @@ func resourceCassandraTable() *schema.Resource {
 				ForceNew:    true,
 				Description: "Keyspace to create table within",
 			},
-			"row_keys": {
-				Type:        schema.TypeList,
-				Elem:        &schema.Schema{Type: schema.TypeString},
+			"attribute": {
+				Type: schema.TypeSet,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"name": {
+							Type:     schema.TypeString,
+							Required: true,
+						},
+						"type": {
+							Type:         schema.TypeString,
+							Required:     true,
+							ValidateFunc: validation.StringInSlice([]string{"S", "N", "B"}, false),
+						},
+					},
+				},
+				Set: func(v interface{}) int {
+					var buf bytes.Buffer
+					m := v.(map[string]interface{})
+					buf.WriteString(fmt.Sprintf("%s-", m["name"].(string)))
+					return stringHashcode(buf.String())
+				},
 				Required:    true,
 				ForceNew:    true,
 				Description: "List of Row Keys",
+			},
+			"row_keys": {
+				Type:        schema.TypeList,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Optional:    true,
+				ForceNew:    true,
+				Description: "List of Row Primary Keys",
 			},
 			"range_keys": {
 				Type:        schema.TypeList,
@@ -52,13 +80,11 @@ func resourceCassandraTable() *schema.Resource {
 	}
 }
 
-// Fake Type for interface on select/query - which we're not going to use here.
-type TableRow map[string]interface{}
-
 func resourceTableCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	var err error
 	name := d.Get("name").(string)
 	keyspace_name := d.Get("keyspace").(string)
+	attributes := d.Get("attribute").(*schema.Set)
 	row_keys := d.Get("row_keys").([]string)
 	range_keys := d.Get("range_keys").([]string)
 	var diags diag.Diagnostics
@@ -80,10 +106,10 @@ func resourceTableCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	keyspace := gocqltable.NewKeyspace(keyspace_name)
 
 	resourceTable := keyspace.NewTable(
-		name,       // The table name
-		row_keys,   // Row keys
-		range_keys, // Range keys
-		TableRow{},
+		name,              // The table name
+		row_keys,          // Row keys
+		range_keys,        // Range keys
+		attributes.List(), // Object Schema/Struct to create
 	)
 
 	err = resourceTable.Create()
@@ -96,6 +122,7 @@ func resourceTableCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	d.Set("keyspace", keyspace_name)
 	d.Set("row_keys", row_keys)
 	d.Set("range_keys", range_keys)
+	d.Set("attributes", attributes)
 
 	diags = append(diags, resourceTableRead(ctx, d, meta)...)
 
@@ -105,6 +132,9 @@ func resourceTableCreate(ctx context.Context, d *schema.ResourceData, meta inter
 func resourceTableRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Id()
 	keyspace_name := d.Get("keyspace").(string)
+	attributes := d.Get("attribute").(*schema.Set)
+	row_keys := d.Get("row_keys").([]string)
+	range_keys := d.Get("range_keys").([]string)
 	var diags diag.Diagnostics
 
 	cluster := meta.(*gocql.ClusterConfig)
@@ -135,9 +165,12 @@ func resourceTableRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	}
 
 	d.SetId(name)
-	d.Set("name", name)
 	if table_exists {
+		d.Set("name", name)
 		d.Set("keyspace", keyspace_name)
+		d.Set("attributes", attributes)
+		d.Set("row_keys", row_keys)
+		d.Set("range_keys", range_keys)
 	}
 
 	return diags
@@ -146,6 +179,7 @@ func resourceTableRead(ctx context.Context, d *schema.ResourceData, meta interfa
 func resourceTableDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Get("name").(string)
 	keyspace_name := d.Get("keyspace").(string)
+	attributes := d.Get("attribute").(*schema.Set)
 	row_keys := d.Get("row_keys").([]string)
 	range_keys := d.Get("range_keys").([]string)
 	var diags diag.Diagnostics
@@ -166,10 +200,10 @@ func resourceTableDelete(ctx context.Context, d *schema.ResourceData, meta inter
 	keyspace := gocqltable.NewKeyspace(keyspace_name)
 
 	resourceTable := keyspace.NewTable(
-		name,       // The table name
-		row_keys,   // Row keys
-		range_keys, // Range keys
-		TableRow{},
+		name,              // The table name
+		row_keys,          // Row keys
+		range_keys,        // Range keys
+		attributes.List(), // Object Schema/Struct to create
 	)
 
 	err := resourceTable.Drop()

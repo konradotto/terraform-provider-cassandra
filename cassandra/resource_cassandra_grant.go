@@ -134,6 +134,7 @@ func validIdentifier(i interface{}, path cty.Path, identifierName string, regula
 
 func resourceCassandraGrant() *schema.Resource {
 	return &schema.Resource{
+		Description:   "Manage Grants within your cassandra cluster",
 		CreateContext: resourceGrantCreate,
 		ReadContext:   resourceGrantRead,
 		UpdateContext: resourceGrantUpdate,

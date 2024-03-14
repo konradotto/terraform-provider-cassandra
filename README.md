@@ -4,6 +4,7 @@ It will provide the following features with respect to CQL 3.0.0 spec
 - Manage Keyspace(s)
 - Manage Role(s)
 - Managing Grants
+- Manage Table(s)
 
 # Requirements
 

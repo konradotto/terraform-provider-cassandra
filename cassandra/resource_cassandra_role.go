@@ -15,6 +15,7 @@ import (
 
 func resourceCassandraRole() *schema.Resource {
 	return &schema.Resource{
+		Description:   "Manage Roles within your cassandra cluster",
 		CreateContext: resourceRoleCreate,
 		ReadContext:   resourceRoleRead,
 		UpdateContext: resourceRoleUpdate,

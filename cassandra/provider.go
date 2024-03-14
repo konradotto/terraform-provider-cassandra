@@ -44,7 +44,7 @@ func Provider() *schema.Provider {
 			"cassandra_keyspace": resourceCassandraKeyspace(),
 			"cassandra_role":     resourceCassandraRole(),
 			"cassandra_grant":    resourceCassandraGrant(),
-			"cassandra_table":    resourceCassandraTable(),
+			"cassandra_table":    resourceCassandraTableSpace(),
 		},
 		ConfigureContextFunc: configureProvider,
 		Schema: map[string]*schema.Schema{
@@ -233,7 +233,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		cluster.HostFilter = gocql.WhiteListHostFilter(hosts...)
 	}
 
-	if v, ok := d.GetOkExists("disable_initial_host_lookup"); ok {
+	if v, ok := d.GetOk("disable_initial_host_lookup"); ok {
 		cluster.DisableInitialHostLookup = v.(bool)
 	}
 

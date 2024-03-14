@@ -30,6 +30,7 @@ var (
 
 func resourceCassandraKeyspace() *schema.Resource {
 	return &schema.Resource{
+		Description:   "Manage Keyspaces within your cassandra cluster",
 		CreateContext: resourceKeyspaceCreate,
 		ReadContext:   resourceKeyspaceRead,
 		UpdateContext: resourceKeyspaceUpdate,
