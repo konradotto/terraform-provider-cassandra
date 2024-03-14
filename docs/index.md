@@ -13,8 +13,8 @@ Terraform 0.13 and later:
 terraform {
   required_providers {
     cassandra = {
-      source  = "bartoszj/cassandra"
-      version = "~> 1.0"
+      source  = "davidcollom/cassandra"
+      version = "~> 1.2"
     }
   }
 }
@@ -60,7 +60,7 @@ resource "cassandra_keyspace" "keyspace" {
 
 - `password` - Cassandra client password. Default `CASSANDRA_PASSWORD` environment variable.
 
-- `port` - Cassandra client port. Default `CASSANDRA_PORT` environment variable, default value is __9042__. 
+- `port` - Cassandra client port. Default `CASSANDRA_PORT` environment variable, default value is __9042__.
 
 - `host` - Host pointing to node in the cassandra cluster. Default `CASSANDRA_HOST` environment variable.
 
