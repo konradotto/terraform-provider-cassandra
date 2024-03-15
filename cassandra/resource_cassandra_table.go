@@ -63,15 +63,17 @@ func resourceCassandraTableSpace() *schema.Resource {
 				Description: "List of Row Keys",
 			},
 			"row_keys": {
-				Type:        schema.TypeList,
+				Type:        schema.TypeSet,
 				Elem:        &schema.Schema{Type: schema.TypeString},
+				Set:         schema.HashString,
 				Optional:    true,
 				ForceNew:    true,
 				Description: "List of Row Primary Keys",
 			},
 			"range_keys": {
-				Type:        schema.TypeList,
+				Type:        schema.TypeSet,
 				Elem:        &schema.Schema{Type: schema.TypeString},
+				Set:         schema.HashString,
 				Optional:    true,
 				ForceNew:    true,
 				Description: "List of Range Keys",
@@ -85,8 +87,8 @@ func resourceTableCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	name := d.Get("name").(string)
 	keyspace_name := d.Get("keyspace").(string)
 	attributes := d.Get("attribute").(*schema.Set)
-	row_keys := d.Get("row_keys").([]string)
-	range_keys := d.Get("range_keys").([]string)
+	row_keys := setToArray(d.Get("row_keys"))
+	range_keys := setToArray(d.Get("range_keys"))
 	var diags diag.Diagnostics
 
 	cluster := meta.(*gocql.ClusterConfig)
@@ -130,11 +132,12 @@ func resourceTableCreate(ctx context.Context, d *schema.ResourceData, meta inter
 }
 
 func resourceTableRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	name := d.Id()
+	name := d.Get("name").(string)
 	keyspace_name := d.Get("keyspace").(string)
 	attributes := d.Get("attribute").(*schema.Set)
-	row_keys := d.Get("row_keys").([]string)
-	range_keys := d.Get("range_keys").([]string)
+	row_keys := setToArray(d.Get("row_keys"))
+	range_keys := setToArray(d.Get("range_keys"))
+
 	var diags diag.Diagnostics
 
 	cluster := meta.(*gocql.ClusterConfig)
@@ -180,8 +183,8 @@ func resourceTableDelete(ctx context.Context, d *schema.ResourceData, meta inter
 	name := d.Get("name").(string)
 	keyspace_name := d.Get("keyspace").(string)
 	attributes := d.Get("attribute").(*schema.Set)
-	row_keys := d.Get("row_keys").([]string)
-	range_keys := d.Get("range_keys").([]string)
+	row_keys := setToArray(d.Get("row_keys"))
+	range_keys := setToArray(d.Get("range_keys"))
 	var diags diag.Diagnostics
 
 	cluster := meta.(*gocql.ClusterConfig)
