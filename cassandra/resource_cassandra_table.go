@@ -94,6 +94,7 @@ func resourceTableCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	cluster := meta.(*gocql.ClusterConfig)
 	start := time.Now()
 	session, sessionCreateError := cluster.CreateSession()
+	gocqltable.SetDefaultSession(session)
 	elapsed := time.Since(start)
 
 	log.Printf("Getting a session took %s", elapsed)
@@ -104,19 +105,21 @@ func resourceTableCreate(ctx context.Context, d *schema.ResourceData, meta inter
 
 	defer session.Close()
 
+	log.Printf("Creating table '%s' in '%s' with obj: %v ", name, keyspace_name, attributes)
+
 	// Now we're ready to create our first keyspace. We start by getting a keyspace object
 	keyspace := gocqltable.NewKeyspace(keyspace_name)
 
 	resourceTable := keyspace.NewTable(
-		name,              // The table name
-		row_keys,          // Row keys
-		range_keys,        // Range keys
-		attributes.List(), // Object Schema/Struct to create
+		name,       // The table name
+		row_keys,   // Row keys
+		range_keys, // Range keys
+		attributes, // Object Schema/Struct to create
 	)
 
 	err = resourceTable.Create()
 	if err != nil {
-		log.Fatalln(err)
+		diag.FromErr(err)
 	}
 
 	d.SetId(name)
@@ -153,15 +156,15 @@ func resourceTableRead(ctx context.Context, d *schema.ResourceData, meta interfa
 
 	defer session.Close()
 
-	keyspace := gocqltable.NewKeyspace(keyspace_name)
-	tables, err := keyspace.Tables()
+	keyspaceMetadata, err := session.KeyspaceMetadata(keyspace_name)
 	if err != nil {
-		return diag.FromErr(sessionCreateError)
+		return diag.FromErr(err)
 	}
 
 	table_exists := false
-	for _, tbl := range tables {
-		if tbl == name {
+	for _, tbl := range keyspaceMetadata.Tables {
+		if tbl.Name == name {
+			log.Printf("Found table '%s' in '%'s", name, keyspace_name)
 			table_exists = true
 			break
 		}
@@ -190,6 +193,7 @@ func resourceTableDelete(ctx context.Context, d *schema.ResourceData, meta inter
 	cluster := meta.(*gocql.ClusterConfig)
 	start := time.Now()
 	session, sessionCreateError := cluster.CreateSession()
+	gocqltable.SetDefaultSession(session)
 	elapsed := time.Since(start)
 
 	log.Printf("Getting a session took %s", elapsed)
@@ -202,11 +206,13 @@ func resourceTableDelete(ctx context.Context, d *schema.ResourceData, meta inter
 
 	keyspace := gocqltable.NewKeyspace(keyspace_name)
 
+	log.Printf("Deleting table '%s' with obj: %v ", name, attributes)
+
 	resourceTable := keyspace.NewTable(
-		name,              // The table name
-		row_keys,          // Row keys
-		range_keys,        // Range keys
-		attributes.List(), // Object Schema/Struct to create
+		name,       // The table name
+		row_keys,   // Row keys
+		range_keys, // Range keys
+		attributes, // Object Schema/Struct to create
 	)
 
 	err := resourceTable.Drop()
