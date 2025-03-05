@@ -35,20 +35,17 @@ func resourceCassandraRole() *schema.Resource {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     false,
-				ForceNew:    false,
 				Description: "Allow role to create and manage other roles",
 			},
 			"login": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     true,
-				ForceNew:    false,
 				Description: "Enables role to be able to login",
 			},
 			"password": {
 				Type:         schema.TypeString,
 				Required:     true,
-				ForceNew:     false,
 				Description:  "Password for user when using Cassandra internal authentication",
 				Sensitive:    true,
 				ValidateFunc: validation.StringLenBetween(40, 512),
@@ -57,7 +54,14 @@ func resourceCassandraRole() *schema.Resource {
 	}
 }
 
-func readRole(session *gocql.Session, name string) (string, bool, bool, string, error) {
+func readRole(session *gocql.Session, name string, mode string) (string, bool, bool, string, error) {
+	tableName := "system_auth.roles"
+	if mode == "scylla" {
+		tableName = "system.roles"
+	}
+	query := fmt.Sprintf("select role, can_login, is_superuser, salted_hash from %s where role = ?", tableName)
+	iter := session.Query(query, name).Iter()
+	defer iter.Close()
 
 	var (
 		role        string
@@ -66,16 +70,11 @@ func readRole(session *gocql.Session, name string) (string, bool, bool, string, 
 		saltedHash  string
 	)
 
-	iter := session.Query(`select role, can_login, is_superuser, salted_hash from system_auth.roles where role = ?`, name).Iter()
-
-	defer iter.Close()
-
-	log.Printf("read role query returned %d", iter.NumRows())
+	log.Printf("read role query returned %d rows", iter.NumRows())
 
 	for iter.Scan(&role, &canLogin, &isSuperUser, &saltedHash) {
 		return role, canLogin, isSuperUser, saltedHash, nil
 	}
-
 	return "", false, false, "", fmt.Errorf("cannot read role with name %s", name)
 }
 
@@ -86,22 +85,23 @@ func resourceRoleCreateOrUpdate(ctx context.Context, d *schema.ResourceData, met
 	password := d.Get("password").(string)
 	var diags diag.Diagnostics
 
-	cluster := meta.(*gocql.ClusterConfig)
+	providerConfig := meta.(*ProviderConfig)
+	cluster := providerConfig.Cluster
+	//mode := providerConfig.Mode
+
 	start := time.Now()
 	session, sessionCreateError := cluster.CreateSession()
 	elapsed := time.Since(start)
-
 	log.Printf("Getting a session took %s", elapsed)
-
 	if sessionCreateError != nil {
 		return diag.FromErr(sessionCreateError)
 	}
-
 	defer session.Close()
 
-	createErr := session.Query(fmt.Sprintf(`%s ROLE '%s' WITH PASSWORD = '%s' AND LOGIN = %v AND SUPERUSER = %v`, boolToAction[createRole], name, password, login, superUser)).Exec()
-	if createErr != nil {
-		return diag.FromErr(createErr)
+	err := session.Query(fmt.Sprintf(`%s ROLE '%s' WITH PASSWORD = '%s' AND LOGIN = %v AND SUPERUSER = %v`,
+		boolToAction[createRole], name, password, login, superUser)).Exec()
+	if err != nil {
+		return diag.FromErr(err)
 	}
 
 	d.SetId(name)
@@ -111,7 +111,6 @@ func resourceRoleCreateOrUpdate(ctx context.Context, d *schema.ResourceData, met
 	d.Set("password", password)
 
 	diags = append(diags, resourceRoleRead(ctx, d, meta)...)
-
 	return diags
 }
 
@@ -124,20 +123,20 @@ func resourceRoleRead(ctx context.Context, d *schema.ResourceData, meta interfac
 	password := d.Get("password").(string)
 	var diags diag.Diagnostics
 
-	cluster := meta.(*gocql.ClusterConfig)
+	providerConfig := meta.(*ProviderConfig)
+	cluster := providerConfig.Cluster
+	mode := providerConfig.Mode
+
 	start := time.Now()
 	session, sessionCreateError := cluster.CreateSession()
 	elapsed := time.Since(start)
-
 	log.Printf("Getting a session took %s", elapsed)
-
 	if sessionCreateError != nil {
 		return diag.FromErr(sessionCreateError)
 	}
-
 	defer session.Close()
-	_name, login, superUser, saltedHash, readRoleErr := readRole(session, name)
 
+	_name, login, superUser, saltedHash, readRoleErr := readRole(session, name, mode)
 	if readRoleErr != nil {
 		return diag.FromErr(readRoleErr)
 	}
@@ -152,10 +151,9 @@ func resourceRoleRead(ctx context.Context, d *schema.ResourceData, meta interfac
 	if result == nil {
 		d.Set("password", password)
 	} else {
-		// password has changed between runs
+		// password has changed between runs; return the hash so Terraform sees no diff.
 		d.Set("password", saltedHash)
 	}
-
 	return diags
 }
 
@@ -163,24 +161,22 @@ func resourceRoleDelete(ctx context.Context, d *schema.ResourceData, meta interf
 	name := d.Get("name").(string)
 	var diags diag.Diagnostics
 
-	cluster := meta.(*gocql.ClusterConfig)
+	providerConfig := meta.(*ProviderConfig)
+	cluster := providerConfig.Cluster
+
 	start := time.Now()
 	session, sessionCreateError := cluster.CreateSession()
 	elapsed := time.Since(start)
-
 	log.Printf("Getting a session took %s", elapsed)
-
 	if sessionCreateError != nil {
 		return diag.FromErr(sessionCreateError)
 	}
-
 	defer session.Close()
 
 	err := session.Query(fmt.Sprintf(`DROP ROLE '%s'`, name)).Exec()
 	if err != nil {
-		diag.FromErr(err)
+		return diag.FromErr(err)
 	}
-
 	return diags
 }
 

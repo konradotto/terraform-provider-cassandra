@@ -3,7 +3,7 @@
 terraform {
   required_providers {
     cassandra = {
-      source  = "davidcollom/cassandra"
+      source  = "dactily/cassandra"
       version = "~> 1.2"
     }
   }

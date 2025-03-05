@@ -18,7 +18,7 @@ description: |-
 terraform {
   required_providers {
     cassandra = {
-      source  = "davidcollom/cassandra"
+      source  = "dactily/cassandra"
       version = "~> 1.2"
     }
   }
@@ -29,6 +29,7 @@ provider "cassandra" {
   password = "cluster_password"
   port     = 9042
   host     = "localhost"
+  mode     = "scylla"
 }
 
 resource "cassandra_keyspace" "keyspace" {
@@ -70,6 +71,7 @@ resource "cassandra_keyspace" "keyspace" {
 - `host_filter` (Boolean) Filter all incoming events for host. Hosts have to existing before using this provider
 - `hosts` (List of String) Cassandra hosts
 - `keyspace` (String) Initial Keyspace
+- `mode` (String) Can be 'scylla' or 'cassandra', if not set defaults to 'cassandra' 
 - `min_tls_version` (String) Minimum TLS Version used to connect to the cluster - allowed values are SSL3.0, TLS1.0, TLS1.1, TLS1.2. Applies only when useSSL is enabled
 - `password` (String, Sensitive) Cassandra password
 - `port` (Number) Cassandra CQL Port

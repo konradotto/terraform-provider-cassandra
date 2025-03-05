@@ -76,7 +76,6 @@ func testAccPreCheck(t *testing.T) {
 	if url == "" {
 		t.Fatal("CASSANDRA_HOST must be set for acceptance tests")
 	}
-
 	err := testAccProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
 	if err != nil {
 		t.Fatal(err)

@@ -7,7 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/gocql/gocql"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -85,98 +84,94 @@ func resourceCassandraTableSpace() *schema.Resource {
 func resourceTableCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	var err error
 	name := d.Get("name").(string)
-	keyspace_name := d.Get("keyspace").(string)
+	keyspaceName := d.Get("keyspace").(string)
 	attributes := d.Get("attribute").(*schema.Set)
-	row_keys := setToArray(d.Get("row_keys"))
-	range_keys := setToArray(d.Get("range_keys"))
+	rowKeys := setToArray(d.Get("row_keys"))
+	rangeKeys := setToArray(d.Get("range_keys"))
 	var diags diag.Diagnostics
 
-	cluster := meta.(*gocql.ClusterConfig)
+	providerConfig := meta.(*ProviderConfig)
+	cluster := providerConfig.Cluster
+
 	start := time.Now()
 	session, sessionCreateError := cluster.CreateSession()
 	gocqltable.SetDefaultSession(session)
 	elapsed := time.Since(start)
-
 	log.Printf("Getting a session took %s", elapsed)
 
 	if sessionCreateError != nil {
 		return diag.FromErr(sessionCreateError)
 	}
-
 	defer session.Close()
 
-	log.Printf("Creating table '%s' in '%s' with obj: %v ", name, keyspace_name, attributes)
+	log.Printf("Creating table '%s' in '%s' with obj: %v ", name, keyspaceName, attributes)
 
-	// Now we're ready to create our first keyspace. We start by getting a keyspace object
-	keyspace := gocqltable.NewKeyspace(keyspace_name)
-
+	keyspace := gocqltable.NewKeyspace(keyspaceName)
 	resourceTable := keyspace.NewTable(
 		name,       // The table name
-		row_keys,   // Row keys
-		range_keys, // Range keys
-		attributes, // Object Schema/Struct to create
+		rowKeys,    // Row keys
+		rangeKeys,  // Range keys
+		attributes, // Schema/struct to create
 	)
 
 	err = resourceTable.Create()
 	if err != nil {
-		diag.FromErr(err)
+		return diag.FromErr(err)
 	}
 
 	d.SetId(name)
 	d.Set("name", name)
-	d.Set("keyspace", keyspace_name)
-	d.Set("row_keys", row_keys)
-	d.Set("range_keys", range_keys)
+	d.Set("keyspace", keyspaceName)
+	d.Set("row_keys", rowKeys)
+	d.Set("range_keys", rangeKeys)
 	d.Set("attributes", attributes)
 
 	diags = append(diags, resourceTableRead(ctx, d, meta)...)
-
 	return diags
 }
 
 func resourceTableRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Get("name").(string)
-	keyspace_name := d.Get("keyspace").(string)
+	keyspaceName := d.Get("keyspace").(string)
 	attributes := d.Get("attribute").(*schema.Set)
-	row_keys := setToArray(d.Get("row_keys"))
-	range_keys := setToArray(d.Get("range_keys"))
-
+	rowKeys := setToArray(d.Get("row_keys"))
+	rangeKeys := setToArray(d.Get("range_keys"))
 	var diags diag.Diagnostics
 
-	cluster := meta.(*gocql.ClusterConfig)
+	providerConfig := meta.(*ProviderConfig)
+	cluster := providerConfig.Cluster
+
 	start := time.Now()
 	session, sessionCreateError := cluster.CreateSession()
 	elapsed := time.Since(start)
-
 	log.Printf("Getting a session took %s", elapsed)
 
 	if sessionCreateError != nil {
 		return diag.FromErr(sessionCreateError)
 	}
-
 	defer session.Close()
 
-	keyspaceMetadata, err := session.KeyspaceMetadata(keyspace_name)
+	keyspaceMetadata, err := session.KeyspaceMetadata(keyspaceName)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	table_exists := false
+	tableExists := false
 	for _, tbl := range keyspaceMetadata.Tables {
 		if tbl.Name == name {
-			log.Printf("Found table '%s' in '%'s", name, keyspace_name)
-			table_exists = true
+			log.Printf("Found table '%s' in '%s'", name, keyspaceName)
+			tableExists = true
 			break
 		}
 	}
 
 	d.SetId(name)
-	if table_exists {
+	if tableExists {
 		d.Set("name", name)
-		d.Set("keyspace", keyspace_name)
+		d.Set("keyspace", keyspaceName)
 		d.Set("attributes", attributes)
-		d.Set("row_keys", row_keys)
-		d.Set("range_keys", range_keys)
+		d.Set("row_keys", rowKeys)
+		d.Set("range_keys", rangeKeys)
 	}
 
 	return diags
@@ -184,40 +179,38 @@ func resourceTableRead(ctx context.Context, d *schema.ResourceData, meta interfa
 
 func resourceTableDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Get("name").(string)
-	keyspace_name := d.Get("keyspace").(string)
+	keyspaceName := d.Get("keyspace").(string)
 	attributes := d.Get("attribute").(*schema.Set)
-	row_keys := setToArray(d.Get("row_keys"))
-	range_keys := setToArray(d.Get("range_keys"))
+	rowKeys := setToArray(d.Get("row_keys"))
+	rangeKeys := setToArray(d.Get("range_keys"))
 	var diags diag.Diagnostics
 
-	cluster := meta.(*gocql.ClusterConfig)
+	providerConfig := meta.(*ProviderConfig)
+	cluster := providerConfig.Cluster
+
 	start := time.Now()
 	session, sessionCreateError := cluster.CreateSession()
 	gocqltable.SetDefaultSession(session)
 	elapsed := time.Since(start)
-
 	log.Printf("Getting a session took %s", elapsed)
 
 	if sessionCreateError != nil {
 		return diag.FromErr(sessionCreateError)
 	}
-
 	defer session.Close()
 
-	keyspace := gocqltable.NewKeyspace(keyspace_name)
-
+	keyspace := gocqltable.NewKeyspace(keyspaceName)
 	log.Printf("Deleting table '%s' with obj: %v ", name, attributes)
-
 	resourceTable := keyspace.NewTable(
 		name,       // The table name
-		row_keys,   // Row keys
-		range_keys, // Range keys
-		attributes, // Object Schema/Struct to create
+		rowKeys,    // Row keys
+		rangeKeys,  // Range keys
+		attributes, // Schema/struct to create
 	)
 
 	err := resourceTable.Drop()
 	if err != nil {
-		diag.FromErr(err)
+		return diag.FromErr(err)
 	}
 
 	return diags

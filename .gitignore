@@ -20,4 +20,5 @@ terraform-provider-cassandra
 .vscode
 
 dist
-vendor/*
+vendor/*# Added by goreleaser init:
+dist/

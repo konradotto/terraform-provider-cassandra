@@ -78,13 +78,12 @@ resource "cassandra_keyspace" "keyspace" {
 }
 
 func testAccCassandraKeyspaceDestroy(s *terraform.State) error {
-	cluster := testAccProvider.Meta().(*gocql.ClusterConfig)
+	pc := testAccProvider.Meta().(*ProviderConfig)
+	cluster := pc.Cluster
 	session, sessionCreateError := cluster.CreateSession()
-
 	if sessionCreateError != nil {
 		return sessionCreateError
 	}
-
 	defer session.Close()
 
 	for _, rs := range s.RootModule().Resources {
@@ -93,14 +92,11 @@ func testAccCassandraKeyspaceDestroy(s *terraform.State) error {
 		}
 
 		keyspace := rs.Primary.Attributes["name"]
-
 		_, err := session.KeyspaceMetadata(keyspace)
-
 		if err == gocql.ErrKeyspaceDoesNotExist {
 			return nil
 		}
-
-		return fmt.Errorf("keyspace %s stil exists", keyspace)
+		return fmt.Errorf("keyspace %s still exists", keyspace)
 	}
 	return nil
 }
@@ -108,29 +104,24 @@ func testAccCassandraKeyspaceDestroy(s *terraform.State) error {
 func testAccCassandraKeyspaceExists(resourceKey string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[resourceKey]
-
 		if !ok {
 			return fmt.Errorf("not found: %s", resourceKey)
 		}
-
 		if rs.Primary.ID == "" {
 			return fmt.Errorf("no ID is set")
 		}
-
-		cluster := testAccProvider.Meta().(*gocql.ClusterConfig)
-
+		pc := testAccProvider.Meta().(*ProviderConfig)
+		cluster := pc.Cluster
 		session, sessionCreateError := cluster.CreateSession()
-
 		if sessionCreateError != nil {
 			return sessionCreateError
 		}
+		defer session.Close()
 
 		_, err := session.KeyspaceMetadata(rs.Primary.ID)
-
 		if err != nil {
 			return err
 		}
-
 		return nil
 	}
 }

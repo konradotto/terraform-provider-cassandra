@@ -17,7 +17,6 @@ import (
 
 var (
 	allowedTLSProtocols = map[string]uint16{
-		// "SSL3.0": tls.VersionSSL30,
 		"TLS1.0": tls.VersionTLS10,
 		"TLS1.1": tls.VersionTLS11,
 		"TLS1.2": tls.VersionTLS12,
@@ -36,6 +35,12 @@ var (
 		"LOCAL_ONE":    gocql.LocalOne,
 	}
 )
+
+// ProviderConfig wraps the underlying gocql.ClusterConfig and holds additional settings.
+type ProviderConfig struct {
+	Cluster *gocql.ClusterConfig
+	Mode    string
+}
 
 // Provider returns a terraform.ResourceProvider
 func Provider() *schema.Provider {
@@ -89,7 +94,7 @@ func Provider() *schema.Provider {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     false,
-				Description: "Filter all incoming events for host. Hosts have to existing before using this provider",
+				Description: "Filter all incoming events for host. Hosts have to exist before using this provider",
 			},
 			"connection_timeout": {
 				Type:        schema.TypeInt,
@@ -100,17 +105,14 @@ func Provider() *schema.Provider {
 			"root_ca": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Description: "Use root CA to connect to Cluster. Applies only when useSSL is enabled",
+				Description: "Use root CA to connect to Cluster. Applies only when use_ssl is enabled",
 				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
 					rootCA := i.(string)
-
 					if rootCA == "" {
 						return nil
 					}
-
 					caPool := x509.NewCertPool()
 					ok := caPool.AppendCertsFromPEM([]byte(rootCA))
-
 					if !ok {
 						return diag.Diagnostics{
 							{
@@ -121,7 +123,6 @@ func Provider() *schema.Provider {
 							},
 						}
 					}
-
 					return nil
 				},
 			},
@@ -135,7 +136,7 @@ func Provider() *schema.Provider {
 				Type:         schema.TypeString,
 				Optional:     true,
 				Default:      "TLS1.2",
-				Description:  "Minimum TLS Version used to connect to the cluster - allowed values are SSL3.0, TLS1.0, TLS1.1, TLS1.2. Applies only when useSSL is enabled",
+				Description:  "Minimum TLS Version used to connect to the cluster - allowed values are TLS1.0, TLS1.1, TLS1.2, TLS1.3. Applies only when use_ssl is enabled",
 				ValidateFunc: validation.StringInSlice([]string{"TLS1.0", "TLS1.1", "TLS1.2", "TLS1.3"}, false),
 			},
 			"protocol_version": {
@@ -157,9 +158,8 @@ func Provider() *schema.Provider {
 				Description: "CQL version",
 			},
 			"keyspace": {
-				Type:     schema.TypeString,
-				Optional: true,
-				// Default:     "system",
+				Type:        schema.TypeString,
+				Optional:    true,
 				Description: "Initial Keyspace",
 			},
 			"disable_initial_host_lookup": {
@@ -167,12 +167,19 @@ func Provider() *schema.Provider {
 				Optional:    true,
 				Description: "Whether the driver will not attempt to get host info from the system.peers table",
 			},
+			// NEW: provider mode option
+			"mode": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				Default:      "cassandra",
+				Description:  "Provider mode: cassandra (default) or scylla",
+				ValidateFunc: validation.StringInSlice([]string{"cassandra", "scylla"}, false),
+			},
 		},
 	}
 }
 
 func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-
 	log.Printf("Creating provider")
 
 	useSSL := d.Get("use_ssl").(bool)
@@ -183,42 +190,29 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	protocolVersion := d.Get("protocol_version").(int)
 	diags := diag.Diagnostics{}
 
-	log.Printf("Using port %d", port)
-	log.Printf("Using use_ssl %v", useSSL)
-	log.Printf("Using username %s", username)
-
 	var rawHosts []interface{}
-
-	if rawHost, getHost := d.GetOk("host"); getHost {
+	if rawHost, ok := d.GetOk("host"); ok {
 		rawHosts = []interface{}{rawHost}
 	} else {
 		rawHosts = d.Get("hosts").([]interface{})
 	}
 
-	hosts := make([]string, len(rawHosts))
+	hosts := make([]string, 0, len(rawHosts))
 	hostFilter := d.Get("host_filter").(bool)
-
-	for _, value := range rawHosts {
-		hosts = append(hosts, value.(string))
-
-		log.Printf("Using host %v", value.(string))
+	for _, v := range rawHosts {
+		hosts = append(hosts, v.(string))
+		log.Printf("Using host %v", v.(string))
 	}
 
 	cluster := gocql.NewCluster()
-
 	cluster.Hosts = hosts
-
 	cluster.Port = port
-
 	cluster.Authenticator = &gocql.PasswordAuthenticator{
 		Username: username,
 		Password: password,
 	}
-
 	cluster.ConnectTimeout = time.Millisecond * time.Duration(connectionTimeout)
-
-	cluster.Timeout = time.Minute * time.Duration(1)
-
+	cluster.Timeout = time.Minute * 1
 	cluster.CQLVersion = d.Get("cql_version").(string)
 
 	if v, ok := d.GetOk("keyspace"); ok && v.(string) != "" {
@@ -226,7 +220,6 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	}
 
 	cluster.Consistency = allowedConsistencies[d.Get("consistency").(string)]
-
 	cluster.ProtoVersion = protocolVersion
 
 	if hostFilter {
@@ -238,18 +231,14 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	}
 
 	if useSSL {
-
 		rootCA := d.Get("root_ca").(string)
 		minTLSVersion := d.Get("min_tls_version").(string)
-
 		tlsConfig := &tls.Config{
 			MinVersion: allowedTLSProtocols[minTLSVersion],
 		}
-
 		if rootCA != "" {
 			caPool := x509.NewCertPool()
 			ok := caPool.AppendCertsFromPEM([]byte(rootCA))
-
 			if !ok {
 				diags = append(diags, diag.Diagnostic{
 					Severity:      diag.Error,
@@ -258,14 +247,18 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 				})
 				return nil, diags
 			}
-
 			tlsConfig.RootCAs = caPool
 		}
-
 		cluster.SslOpts = &gocql.SslOptions{
 			Config: tlsConfig,
 		}
 	}
 
-	return cluster, diags
+	mode := d.Get("mode").(string)
+	log.Printf("Using provider mode: %s", mode)
+
+	return &ProviderConfig{
+		Cluster: cluster,
+		Mode:    mode,
+	}, diags
 }
