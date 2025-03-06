@@ -18,18 +18,18 @@ description: |-
 terraform {
   required_providers {
     cassandra = {
-      source  = "dactily/cassandra"
-      version = "~> 1.2"
+      source = "dactily/cassandra"
+      version = "1.0.7"
     }
   }
 }
 
 provider "cassandra" {
-  username = "cluster_username"
-  password = "cluster_password"
-  port     = 9042
-  host     = "localhost"
-  mode     = "scylla"
+  host                 = "127.0.0.1"
+  username             = "cassandra"
+  password             = "cassandra"
+  port                 = 9042
+  system_keyspace_name = "system"
 }
 
 resource "cassandra_keyspace" "keyspace" {
@@ -38,6 +38,18 @@ resource "cassandra_keyspace" "keyspace" {
   strategy_options     = {
     replication_factor = 1
   }
+}
+
+resource "cassandra_role" "role" {
+  name     = "app_user"
+  password = "1231231231231231231231231231231231231231"
+}
+
+resource "cassandra_grant" "all_access_to_keyspace" {
+  privilege     = "all"
+  resource_type = "keyspace"
+  keyspace_name = cassandra_keyspace.keyspace.name
+  grantee       = cassandra_role.role.name
 }
 
 // Terraform 0.12 and earlier:

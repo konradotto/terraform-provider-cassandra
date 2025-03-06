@@ -4,7 +4,7 @@ terraform {
   required_providers {
     cassandra = {
       source  = "dactily/cassandra"
-      version = "~> 1.2"
+      version = "1.0.7"
     }
   }
 }
@@ -14,6 +14,7 @@ provider "cassandra" {
   password = "cluster_password"
   port     = 9042
   host     = "localhost"
+  system_keyspace_name  = "system_auth" # or "system" for new Scylla/Cassandra versions
 }
 
 resource "cassandra_keyspace" "keyspace" {

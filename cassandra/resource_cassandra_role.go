@@ -2,8 +2,6 @@ package cassandra
 
 import (
 	"context"
-	"crypto/sha512"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"time"
@@ -12,7 +10,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func resourceCassandraRole() *schema.Resource {
@@ -30,7 +27,7 @@ func resourceCassandraRole() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				Description:  "Name of role - must contain between 1 and 256 characters",
+				Description:  "Name of role",
 				ValidateFunc: validation.StringLenBetween(1, 256),
 			},
 			"super_user": {
@@ -43,13 +40,13 @@ func resourceCassandraRole() *schema.Resource {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     true,
-				Description: "Enables role to be able to login",
+				Description: "Enable login for the role",
 			},
 			"password": {
 				Type:         schema.TypeString,
 				Required:     true,
-				Description:  "Password for user when using Cassandra internal authentication",
 				Sensitive:    true,
+				ForceNew:     true,
 				ValidateFunc: validation.StringLenBetween(40, 512),
 			},
 		},
@@ -58,7 +55,7 @@ func resourceCassandraRole() *schema.Resource {
 
 func readRole(session *gocql.Session, name string, systemKeyspace string) (string, bool, bool, string, error) {
 	tableName := fmt.Sprintf("%s.roles", systemKeyspace)
-	query := fmt.Sprintf("select role, can_login, is_superuser, salted_hash from %s where role = ?", tableName)
+	query := fmt.Sprintf("SELECT role, can_login, is_superuser, salted_hash FROM %s WHERE role = ?", tableName)
 	iter := session.Query(query, name).Iter()
 	defer iter.Close()
 
@@ -68,23 +65,10 @@ func readRole(session *gocql.Session, name string, systemKeyspace string) (strin
 		isSuperUser bool
 		saltedHash  string
 	)
-
-	for iter.Scan(&role, &canLogin, &isSuperUser, &saltedHash) {
+	if iter.Scan(&role, &canLogin, &isSuperUser, &saltedHash) {
 		return role, canLogin, isSuperUser, saltedHash, nil
 	}
 	return "", false, false, "", fmt.Errorf("cannot read role with name %s", name)
-}
-
-func checkPassword(algorithm, storedHash, password string) error {
-	if algorithm == "sha-512" {
-		hashBytes := sha512.Sum512([]byte(password))
-		computedHash := hex.EncodeToString(hashBytes[:])
-		if computedHash != storedHash {
-			return fmt.Errorf("password hash mismatch")
-		}
-		return nil
-	}
-	return bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password))
 }
 
 func resourceRoleCreateOrUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}, createRole bool) diag.Diagnostics {
@@ -98,17 +82,22 @@ func resourceRoleCreateOrUpdate(ctx context.Context, d *schema.ResourceData, met
 	cluster := providerConfig.Cluster
 
 	start := time.Now()
-	session, sessionCreateError := cluster.CreateSession()
+	session, err := cluster.CreateSession()
 	elapsed := time.Since(start)
 	log.Printf("Getting a session took %s", elapsed)
-	if sessionCreateError != nil {
-		return diag.FromErr(sessionCreateError)
+	if err != nil {
+		return diag.FromErr(err)
 	}
 	defer session.Close()
 
-	err := session.Query(fmt.Sprintf(`%s ROLE '%s' WITH PASSWORD = '%s' AND LOGIN = %v AND SUPERUSER = %v`,
-		boolToAction[createRole], name, password, login, superUser)).Exec()
-	if err != nil {
+	action := "CREATE"
+	if !createRole {
+		action = "ALTER"
+	}
+	query := fmt.Sprintf(`%s ROLE '%s' WITH PASSWORD = '%s' AND LOGIN = %v AND SUPERUSER = %v`,
+		action, name, password, login, superUser)
+	log.Printf("Executing query: %s", query)
+	if err := session.Query(query).Exec(); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -128,37 +117,28 @@ func resourceRoleCreate(ctx context.Context, d *schema.ResourceData, meta interf
 
 func resourceRoleRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Id()
-	password := d.Get("password").(string)
 	var diags diag.Diagnostics
 
 	providerConfig := meta.(*ProviderConfig)
 	cluster := providerConfig.Cluster
 
 	start := time.Now()
-	session, sessionCreateError := cluster.CreateSession()
+	session, err := cluster.CreateSession()
 	elapsed := time.Since(start)
 	log.Printf("Getting a session took %s", elapsed)
-	if sessionCreateError != nil {
-		return diag.FromErr(sessionCreateError)
+	if err != nil {
+		return diag.FromErr(err)
 	}
 	defer session.Close()
 
-	_name, login, superUser, saltedHash, readRoleErr := readRole(session, name, providerConfig.SystemKeyspaceName)
-	if readRoleErr != nil {
-		return diag.FromErr(readRoleErr)
+	_role, login, superUser, _, err := readRole(session, name, providerConfig.SystemKeyspaceName)
+	if err != nil {
+		return diag.FromErr(err)
 	}
 
-	err := checkPassword(providerConfig.PwEncryptionAlgorithm, saltedHash, password)
-	if err == nil {
-		d.Set("password", password)
-	} else {
-		d.Set("password", saltedHash)
-	}
-	d.SetId(_name)
-	d.Set("name", _name)
+	d.Set("name", _role)
 	d.Set("super_user", superUser)
 	d.Set("login", login)
-
 	return diags
 }
 
@@ -170,16 +150,16 @@ func resourceRoleDelete(ctx context.Context, d *schema.ResourceData, meta interf
 	cluster := providerConfig.Cluster
 
 	start := time.Now()
-	session, sessionCreateError := cluster.CreateSession()
+	session, err := cluster.CreateSession()
 	elapsed := time.Since(start)
 	log.Printf("Getting a session took %s", elapsed)
-	if sessionCreateError != nil {
-		return diag.FromErr(sessionCreateError)
+	if err != nil {
+		return diag.FromErr(err)
 	}
 	defer session.Close()
 
-	err := session.Query(fmt.Sprintf(`DROP ROLE '%s'`, name)).Exec()
-	if err != nil {
+	query := fmt.Sprintf(`DROP ROLE '%s'`, name)
+	if err := session.Query(query).Exec(); err != nil {
 		return diag.FromErr(err)
 	}
 	return diags

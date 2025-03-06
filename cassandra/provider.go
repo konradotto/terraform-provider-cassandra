@@ -38,9 +38,8 @@ var (
 
 // ProviderConfig wraps the underlying gocql.ClusterConfig and holds additional settings.
 type ProviderConfig struct {
-	Cluster               *gocql.ClusterConfig
-	SystemKeyspaceName    string
-	PwEncryptionAlgorithm string
+	Cluster            *gocql.ClusterConfig
+	SystemKeyspaceName string
 }
 
 // Provider returns a terraform.ResourceProvider
@@ -261,11 +260,9 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	}
 
 	systemKeyspaceName := d.Get("system_keyspace_name").(string)
-	pwEncryptionAlgorithm := d.Get("pw_encryption_algorithm").(string)
 
 	return &ProviderConfig{
-		Cluster:               cluster,
-		SystemKeyspaceName:    systemKeyspaceName,
-		PwEncryptionAlgorithm: pwEncryptionAlgorithm,
+		Cluster:            cluster,
+		SystemKeyspaceName: systemKeyspaceName,
 	}, diags
 }
