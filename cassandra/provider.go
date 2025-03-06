@@ -38,8 +38,9 @@ var (
 
 // ProviderConfig wraps the underlying gocql.ClusterConfig and holds additional settings.
 type ProviderConfig struct {
-	Cluster *gocql.ClusterConfig
-	Mode    string
+	Cluster               *gocql.ClusterConfig
+	SystemKeyspaceName    string
+	PwEncryptionAlgorithm string
 }
 
 // Provider returns a terraform.ResourceProvider
@@ -167,13 +168,18 @@ func Provider() *schema.Provider {
 				Optional:    true,
 				Description: "Whether the driver will not attempt to get host info from the system.peers table",
 			},
-			// NEW: provider mode option
-			"mode": {
+			"system_keyspace_name": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "system_auth",
+				Description: "System keyspace name for roles and grants",
+			},
+			"pw_encryption_algorithm": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				Default:      "cassandra",
-				Description:  "Provider mode: cassandra (default) or scylla",
-				ValidateFunc: validation.StringInSlice([]string{"cassandra", "scylla"}, false),
+				Default:      "bcrypt",
+				Description:  "Password encryption algorithm. Allowed values: bcrypt, sha-512",
+				ValidateFunc: validation.StringInSlice([]string{"bcrypt", "sha-512"}, false),
 			},
 		},
 	}
@@ -254,11 +260,12 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		}
 	}
 
-	mode := d.Get("mode").(string)
-	log.Printf("Using provider mode: %s", mode)
+	systemKeyspaceName := d.Get("system_keyspace_name").(string)
+	pwEncryptionAlgorithm := d.Get("pw_encryption_algorithm").(string)
 
 	return &ProviderConfig{
-		Cluster: cluster,
-		Mode:    mode,
+		Cluster:               cluster,
+		SystemKeyspaceName:    systemKeyspaceName,
+		PwEncryptionAlgorithm: pwEncryptionAlgorithm,
 	}, diags
 }

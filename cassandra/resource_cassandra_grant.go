@@ -16,11 +16,13 @@ import (
 )
 
 const (
-	deleteGrantRawTemplate        = `REVOKE {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} FROM "{{.Grantee}}"`
-	createGrantRawTemplate        = `GRANT {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} TO "{{.Grantee}}"`
-	readGrantRawTemplateCassandra = `SELECT permissions FROM system_auth.role_permissions where resource='data/{{if .Keyspace }}{{ .Keyspace }}{{end}}{{if and .Keyspace .Identifier}}/{{end}}{{if .Identifier}}{{.Identifier}}{{end}}' and role='{{.Grantee}}' ALLOW FILTERING;`
-	readGrantRawTemplateScylla    = `SELECT permissions FROM system.role_permissions where resource='data/{{if .Keyspace }}{{ .Keyspace }}{{end}}{{if and .Keyspace .Identifier}}/{{end}}{{if .Identifier}}{{.Identifier}}{{end}}' and role='{{.Grantee}}' ALLOW FILTERING;`
+	deleteGrantRawTemplate = `REVOKE {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} FROM "{{.Grantee}}"`
+	createGrantRawTemplate = `GRANT {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} TO "{{.Grantee}}"`
+)
 
+const templateReadGrant = `SELECT permissions FROM {{.SystemKeyspace}}.role_permissions where resource='data/{{if .Keyspace }}{{ .Keyspace }}{{end}}{{if and .Keyspace .Identifier}}/{{end}}{{if .Identifier}}{{.Identifier}}{{end}}' and role='{{.Grantee}}' ALLOW FILTERING;`
+
+const (
 	privilegeAll       = "all"
 	privilegeCreate    = "create"
 	privilegeAlter     = "alter"
@@ -56,11 +58,8 @@ const (
 )
 
 var (
-	templateDelete, _        = template.New("delete_grant").Parse(deleteGrantRawTemplate)
-	templateCreate, _        = template.New("create_grant").Parse(createGrantRawTemplate)
-	templateReadCassandra, _ = template.New("read_grant_cassandra").Parse(readGrantRawTemplateCassandra)
-	templateReadScylla, _    = template.New("read_grant_scylla").Parse(readGrantRawTemplateScylla)
-
+	templateDelete, _           = template.New("delete_grant").Parse(deleteGrantRawTemplate)
+	templateCreate, _           = template.New("create_grant").Parse(createGrantRawTemplate)
 	validIdentifierRegex, _     = regexp.Compile(`^[^"]{1,256}$`)
 	validTableNameRegex, _      = regexp.Compile(`^[a-zA-Z0-9][a-zA-Z0-9_]{0,255}`)
 	allPrivileges               = []string{privilegeSelect, privilegeCreate, privilegeAlter, privilegeDrop, privilegeModify, privilegeAuthorize, privilegeDescribe, privilegeExecute}
@@ -325,14 +324,18 @@ func resourceGrantExists(d *schema.ResourceData, meta interface{}) (bool, error)
 	defer session.Close()
 
 	var buffer bytes.Buffer
-	// Choose the appropriate read template based on provider mode
-	var tmpl *template.Template
-	if providerConfig.Mode == "scylla" {
-		tmpl = templateReadScylla
-	} else {
-		tmpl = templateReadCassandra
+	tmpl, err := template.New("read_grant").Parse(templateReadGrant)
+	if err != nil {
+		return false, err
 	}
-	if err := tmpl.Execute(&buffer, grant); err != nil {
+	data := struct {
+		*Grant
+		SystemKeyspace string
+	}{
+		Grant:          grant,
+		SystemKeyspace: providerConfig.SystemKeyspaceName,
+	}
+	if err := tmpl.Execute(&buffer, data); err != nil {
 		return false, err
 	}
 	query := buffer.String()

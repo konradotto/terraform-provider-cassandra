@@ -2,6 +2,8 @@ package cassandra
 
 import (
 	"context"
+	"crypto/sha512"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"time"
@@ -54,11 +56,8 @@ func resourceCassandraRole() *schema.Resource {
 	}
 }
 
-func readRole(session *gocql.Session, name string, mode string) (string, bool, bool, string, error) {
-	tableName := "system_auth.roles"
-	if mode == "scylla" {
-		tableName = "system.roles"
-	}
+func readRole(session *gocql.Session, name string, systemKeyspace string) (string, bool, bool, string, error) {
+	tableName := fmt.Sprintf("%s.roles", systemKeyspace)
 	query := fmt.Sprintf("select role, can_login, is_superuser, salted_hash from %s where role = ?", tableName)
 	iter := session.Query(query, name).Iter()
 	defer iter.Close()
@@ -70,12 +69,22 @@ func readRole(session *gocql.Session, name string, mode string) (string, bool, b
 		saltedHash  string
 	)
 
-	log.Printf("read role query returned %d rows", iter.NumRows())
-
 	for iter.Scan(&role, &canLogin, &isSuperUser, &saltedHash) {
 		return role, canLogin, isSuperUser, saltedHash, nil
 	}
 	return "", false, false, "", fmt.Errorf("cannot read role with name %s", name)
+}
+
+func checkPassword(algorithm, storedHash, password string) error {
+	if algorithm == "sha-512" {
+		hashBytes := sha512.Sum512([]byte(password))
+		computedHash := hex.EncodeToString(hashBytes[:])
+		if computedHash != storedHash {
+			return fmt.Errorf("password hash mismatch")
+		}
+		return nil
+	}
+	return bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password))
 }
 
 func resourceRoleCreateOrUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}, createRole bool) diag.Diagnostics {
@@ -87,7 +96,6 @@ func resourceRoleCreateOrUpdate(ctx context.Context, d *schema.ResourceData, met
 
 	providerConfig := meta.(*ProviderConfig)
 	cluster := providerConfig.Cluster
-	//mode := providerConfig.Mode
 
 	start := time.Now()
 	session, sessionCreateError := cluster.CreateSession()
@@ -125,7 +133,6 @@ func resourceRoleRead(ctx context.Context, d *schema.ResourceData, meta interfac
 
 	providerConfig := meta.(*ProviderConfig)
 	cluster := providerConfig.Cluster
-	mode := providerConfig.Mode
 
 	start := time.Now()
 	session, sessionCreateError := cluster.CreateSession()
@@ -136,24 +143,22 @@ func resourceRoleRead(ctx context.Context, d *schema.ResourceData, meta interfac
 	}
 	defer session.Close()
 
-	_name, login, superUser, saltedHash, readRoleErr := readRole(session, name, mode)
+	_name, login, superUser, saltedHash, readRoleErr := readRole(session, name, providerConfig.SystemKeyspaceName)
 	if readRoleErr != nil {
 		return diag.FromErr(readRoleErr)
 	}
 
-	result := bcrypt.CompareHashAndPassword([]byte(saltedHash), []byte(password))
-
+	err := checkPassword(providerConfig.PwEncryptionAlgorithm, saltedHash, password)
+	if err == nil {
+		d.Set("password", password)
+	} else {
+		d.Set("password", saltedHash)
+	}
 	d.SetId(_name)
 	d.Set("name", _name)
 	d.Set("super_user", superUser)
 	d.Set("login", login)
 
-	if result == nil {
-		d.Set("password", password)
-	} else {
-		// password has changed between runs; return the hash so Terraform sees no diff.
-		d.Set("password", saltedHash)
-	}
 	return diags
 }
 

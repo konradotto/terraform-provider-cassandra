@@ -8,7 +8,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-// taken from here - http://techblog.d2-si.eu/2018/02/23/my-first-terraform-provider.html
 func hash(s string) string {
 	sha := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sha[:])
@@ -22,7 +21,6 @@ func stringHashcode(s string) int {
 	if -v >= 0 {
 		return -v
 	}
-	// v == MinInt
 	return 0
 }
 

@@ -108,10 +108,10 @@ func resourceTableCreate(ctx context.Context, d *schema.ResourceData, meta inter
 
 	keyspace := gocqltable.NewKeyspace(keyspaceName)
 	resourceTable := keyspace.NewTable(
-		name,       // The table name
-		rowKeys,    // Row keys
-		rangeKeys,  // Range keys
-		attributes, // Schema/struct to create
+		name,
+		rowKeys,
+		rangeKeys,
+		attributes,
 	)
 
 	err = resourceTable.Create()
@@ -202,10 +202,10 @@ func resourceTableDelete(ctx context.Context, d *schema.ResourceData, meta inter
 	keyspace := gocqltable.NewKeyspace(keyspaceName)
 	log.Printf("Deleting table '%s' with obj: %v ", name, attributes)
 	resourceTable := keyspace.NewTable(
-		name,       // The table name
-		rowKeys,    // Row keys
-		rangeKeys,  // Range keys
-		attributes, // Schema/struct to create
+		name,
+		rowKeys,
+		rangeKeys,
+		attributes,
 	)
 
 	err := resourceTable.Drop()
