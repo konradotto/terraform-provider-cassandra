@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	deleteGrantRawTemplate = `REVOKE {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} FROM "{{.Grantee}}"`
-	createGrantRawTemplate = `GRANT {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} TO "{{.Grantee}}"`
-	readGrantRawTemplate   = `SELECT permissions FROM system_auth.role_permissions where resource='data/{{if .Keyspace }}{{ .Keyspace }}{{end}}{{if and .Keyspace .Identifier}}/{{end}}{{if .Identifier}}{{.Identifier}}{{end}}' and role='{{.Grantee}}' ALLOW FILTERING;`
+	deleteGrantRawTemplate        = `REVOKE {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} FROM "{{.Grantee}}"`
+	createGrantRawTemplate        = `GRANT {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} TO "{{.Grantee}}"`
+	readGrantRawTemplateCassandra = `SELECT permissions FROM system_auth.role_permissions where resource='data/{{if .Keyspace }}{{ .Keyspace }}{{end}}{{if and .Keyspace .Identifier}}/{{end}}{{if .Identifier}}{{.Identifier}}{{end}}' and role='{{.Grantee}}' ALLOW FILTERING;`
+	readGrantRawTemplateScylla    = `SELECT permissions FROM system.role_permissions where resource='data/{{if .Keyspace }}{{ .Keyspace }}{{end}}{{if and .Keyspace .Identifier}}/{{end}}{{if .Identifier}}{{.Identifier}}{{end}}' and role='{{.Grantee}}' ALLOW FILTERING;`
 
 	privilegeAll       = "all"
 	privilegeCreate    = "create"
@@ -55,17 +56,15 @@ const (
 )
 
 var (
-	templateDelete, _ = template.New("delete_grant").Parse(deleteGrantRawTemplate)
-	templateCreate, _ = template.New("create_grant").Parse(createGrantRawTemplate)
-	templateRead, _   = template.New("read_grant").Parse(readGrantRawTemplate)
+	templateDelete, _        = template.New("delete_grant").Parse(deleteGrantRawTemplate)
+	templateCreate, _        = template.New("create_grant").Parse(createGrantRawTemplate)
+	templateReadCassandra, _ = template.New("read_grant_cassandra").Parse(readGrantRawTemplateCassandra)
+	templateReadScylla, _    = template.New("read_grant_scylla").Parse(readGrantRawTemplateScylla)
 
-	validIdentifierRegex, _ = regexp.Compile(`^[^"]{1,256}$`)
-	validTableNameRegex, _  = regexp.Compile(`^[a-zA-Z0-9][a-zA-Z0-9_]{0,255}`)
-
-	allPrivileges = []string{privilegeSelect, privilegeCreate, privilegeAlter, privilegeDrop, privilegeModify, privilegeAuthorize, privilegeDescribe, privilegeExecute}
-
-	allResources = []string{resourceAllFunctions, resourceAllFunctionsInKeyspace, resourceFunction, resourceAllKeyspaces, resourceKeyspace, resourceTable, resourceAllRoles, resourceRole, resourceRoles, resourceMbean, resourceMbeans, resourceAllMbeans}
-
+	validIdentifierRegex, _     = regexp.Compile(`^[^"]{1,256}$`)
+	validTableNameRegex, _      = regexp.Compile(`^[a-zA-Z0-9][a-zA-Z0-9_]{0,255}`)
+	allPrivileges               = []string{privilegeSelect, privilegeCreate, privilegeAlter, privilegeDrop, privilegeModify, privilegeAuthorize, privilegeDescribe, privilegeExecute}
+	allResources                = []string{resourceAllFunctions, resourceAllFunctionsInKeyspace, resourceFunction, resourceAllKeyspaces, resourceKeyspace, resourceTable, resourceAllRoles, resourceRole, resourceRoles, resourceMbean, resourceMbeans, resourceAllMbeans}
 	privilegeToResourceTypesMap = map[string][]string{
 		privilegeAll:       {resourceAllFunctions, resourceAllFunctionsInKeyspace, resourceFunction, resourceAllKeyspaces, resourceKeyspace, resourceTable, resourceAllRoles, resourceRole},
 		privilegeCreate:    {resourceAllKeyspaces, resourceKeyspace, resourceAllFunctions, resourceAllFunctionsInKeyspace, resourceAllRoles},
@@ -77,7 +76,6 @@ var (
 		privilegeDescribe:  {resourceAllRoles, resourceAllMbeans},
 		privilegeExecute:   {resourceAllFunctions, resourceAllFunctionsInKeyspace, resourceFunction},
 	}
-
 	validResources = map[string]bool{
 		resourceAllFunctions:           true,
 		resourceAllFunctionsInKeyspace: true,
@@ -92,10 +90,8 @@ var (
 		resourceMbeans:                 true,
 		resourceAllMbeans:              true,
 	}
-
 	resourcesThatRequireKeyspaceQualifier = []string{resourceAllFunctionsInKeyspace, resourceFunction, resourceKeyspace, resourceTable}
-
-	resourceTypeToIdentifier = map[string]string{
+	resourceTypeToIdentifier              = map[string]string{
 		resourceFunction: identifierFunctionName,
 		resourceMbean:    identifierMbeanName,
 		resourceMbeans:   identifierMbeanPattern,
@@ -119,7 +115,7 @@ func validIdentifier(i interface{}, path cty.Path, identifierName string, regula
 			{
 				Severity:      diag.Error,
 				Summary:       "Not valid value",
-				Detail:        fmt.Sprintf("%s in not a valid %s name", identifier, identifierName),
+				Detail:        fmt.Sprintf("%s is not a valid %s name", identifier, identifierName),
 				AttributePath: path,
 			},
 		}
@@ -174,7 +170,7 @@ func resourceCassandraGrant() *schema.Resource {
 							{
 								Severity:      diag.Error,
 								Summary:       "Not valid resource type",
-								Detail:        fmt.Sprintf("%s in not a valid resourceType, must be one of %s", resourceType, strings.Join(allResources, ", ")),
+								Detail:        fmt.Sprintf("%s is not a valid resourceType, must be one of %s", resourceType, strings.Join(allResources, ", ")),
 								AttributePath: path,
 							},
 						}
@@ -194,7 +190,7 @@ func resourceCassandraGrant() *schema.Resource {
 							{
 								Severity:      diag.Error,
 								Summary:       "Not valid keyspace name",
-								Detail:        fmt.Sprintf("%s in not a valid keyspace name", keyspaceName),
+								Detail:        fmt.Sprintf("%s is not a valid keyspace name", keyspaceName),
 								AttributePath: path,
 							},
 						}
@@ -253,7 +249,7 @@ func resourceCassandraGrant() *schema.Resource {
 							{
 								Severity:      diag.Error,
 								Summary:       "Not valid mbean",
-								Detail:        fmt.Sprintf("%s in not a valid pattern", mbeanPatternRaw),
+								Detail:        fmt.Sprintf("%s is not a valid pattern", mbeanPatternRaw),
 								AttributePath: path,
 							},
 						}
@@ -321,6 +317,7 @@ func resourceGrantExists(d *schema.ResourceData, meta interface{}) (bool, error)
 
 	providerConfig := meta.(*ProviderConfig)
 	cluster := providerConfig.Cluster
+
 	session, sessionCreationError := cluster.CreateSession()
 	if sessionCreationError != nil {
 		return false, sessionCreationError
@@ -328,7 +325,14 @@ func resourceGrantExists(d *schema.ResourceData, meta interface{}) (bool, error)
 	defer session.Close()
 
 	var buffer bytes.Buffer
-	if err := templateRead.Execute(&buffer, grant); err != nil {
+	// Choose the appropriate read template based on provider mode
+	var tmpl *template.Template
+	if providerConfig.Mode == "scylla" {
+		tmpl = templateReadScylla
+	} else {
+		tmpl = templateReadCassandra
+	}
+	if err := tmpl.Execute(&buffer, grant); err != nil {
 		return false, err
 	}
 	query := buffer.String()
@@ -350,6 +354,7 @@ func resourceGrantCreate(ctx context.Context, d *schema.ResourceData, meta inter
 
 	providerConfig := meta.(*ProviderConfig)
 	cluster := providerConfig.Cluster
+
 	session, sessionCreationError := cluster.CreateSession()
 	if sessionCreationError != nil {
 		return diag.FromErr(sessionCreationError)
@@ -388,7 +393,6 @@ func resourceGrantRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	d.Set(identifierResourceType, grant.ResourceType)
 	d.Set(identifierGrantee, grant.Grantee)
 	d.Set(identifierPrivilege, grant.Privilege)
-
 	if grant.Keyspace != "" {
 		d.Set(identifierKeyspaceName, grant.Keyspace)
 	}
