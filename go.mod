@@ -1,4 +1,4 @@
-module github.com/konradotto/terraform-provider-cassandra
+module github.com/dactily/terraform-provider-cassandra
 
 go 1.24.1
 

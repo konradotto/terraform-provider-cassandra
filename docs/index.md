@@ -18,8 +18,8 @@ description: |-
 terraform {
   required_providers {
     cassandra = {
-      source = "konradotto/cassandra"
-      version = "1.0.9"
+      source = "dactily/cassandra"
+      version = "1.0.7"
     }
   }
 }

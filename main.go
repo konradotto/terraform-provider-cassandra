@@ -5,7 +5,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/konradotto/terraform-provider-cassandra/cassandra"
+	"github.com/dactily/terraform-provider-cassandra/cassandra"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
 )
@@ -22,7 +22,7 @@ func main() {
 	}
 
 	if debugMode {
-		err := plugin.Debug(context.Background(), "registry.terraform.io/konradotto/cassandra", opts)
+		err := plugin.Debug(context.Background(), "registry.terraform.io/dactily/cassandra", opts)
 		if err != nil {
 			log.Fatal(err.Error())
 		}
