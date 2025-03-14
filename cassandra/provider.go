@@ -262,7 +262,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		}
 		cluster.SslOpts = &gocql.SslOptions{
 			Config: tlsConfig,
-			EnableHostVerification: d.Get("enable_host_verification").(bool)
+			EnableHostVerification: d.Get("enable_host_verification").(bool),
 		}
 	}
 
