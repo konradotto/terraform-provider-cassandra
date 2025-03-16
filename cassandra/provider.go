@@ -253,7 +253,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		insecureSkipVerify := d.Get("insecure_skip_verify").(bool)
 		tlsConfig := &tls.Config{
 			MinVersion: allowedTLSProtocols[minTLSVersion],
-			InsecureSkipVerify: insecureSkipVerify
+			InsecureSkipVerify: insecureSkipVerify,
 		}
 		if rootCA != "" {
 			caPool := x509.NewCertPool()
