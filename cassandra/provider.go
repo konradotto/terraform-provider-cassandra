@@ -145,6 +145,12 @@ func Provider() *schema.Provider {
 				Default:     true,
 				Description: "Option to disable host verification with SSL. Setting this to false is equivalent to setting SSL_VALIDATE=false with cql",
 			},
+			"insecure_skip_verify": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Skip verifying the remote certificate from the cql client",
+			},
 			"protocol_version": {
 				Type:        schema.TypeInt,
 				Optional:    true,
@@ -244,8 +250,10 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	if useSSL {
 		rootCA := d.Get("root_ca").(string)
 		minTLSVersion := d.Get("min_tls_version").(string)
+		insecureSkipVerify := d.Get("insecure_skip_verify").(bool)
 		tlsConfig := &tls.Config{
 			MinVersion: allowedTLSProtocols[minTLSVersion],
+			InsecureSkipVerify: insecureSkipVerify
 		}
 		if rootCA != "" {
 			caPool := x509.NewCertPool()

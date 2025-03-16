@@ -34,4 +34,5 @@ provider "cassandra" {
   # keyspace            = "initial_keyspace"
   # disable_initial_host_lookup = false
   # enable_host_verification    = true
+  # insecure_skip_verify        = false
 }
