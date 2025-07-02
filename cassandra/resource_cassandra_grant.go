@@ -18,9 +18,8 @@ import (
 const (
 	deleteGrantRawTemplate = `REVOKE {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} FROM "{{.Grantee}}"`
 	createGrantRawTemplate = `GRANT {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace}}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} TO "{{.Grantee}}"`
+	readGrantRawTemplate   = `LIST {{ .Privilege }} ON {{.ResourceType}} {{if .Keyspace }}"{{ .Keyspace }}"{{end}}{{if and .Keyspace .Identifier}}.{{end}}{{if .Identifier}}"{{.Identifier}}"{{end}} OF "{{.Grantee}}"`
 )
-
-const templateReadGrant = `SELECT permissions FROM {{.SystemKeyspace}}.role_permissions where resource='data/{{if .Keyspace }}{{ .Keyspace }}{{end}}{{if and .Keyspace .Identifier}}/{{end}}{{if .Identifier}}{{.Identifier}}{{end}}' and role='{{.Grantee}}' ALLOW FILTERING;`
 
 const (
 	privilegeAll       = "all"
@@ -324,7 +323,7 @@ func resourceGrantExists(d *schema.ResourceData, meta interface{}) (bool, error)
 	defer session.Close()
 
 	var buffer bytes.Buffer
-	tmpl, err := template.New("read_grant").Parse(templateReadGrant)
+	tmpl, err := template.New("read_grant").Parse(readGrantRawTemplate)
 	if err != nil {
 		return false, err
 	}
